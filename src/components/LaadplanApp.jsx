@@ -80,12 +80,12 @@ export default function LaadplanApp() {
   };
 
   const handleExportPdf = async () => {
-    const prevHovered = hoveredLineIndex;
-    setHoveredLineIndex(null);
-    // Wait for re-render before capturing
-    await new Promise((r) => setTimeout(r, 50));
-    await exportPlanAsPdf(visualRef.current, plan, vehicle);
-    setHoveredLineIndex(prevHovered);
+    try {
+      await exportPlanAsPdf(null, plan, vehicle);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      alert("PDF export mislukt: " + err.message);
+    }
   };
 
   const handleResetPlan = () => {
