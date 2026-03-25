@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, RotateCcw } from "lucide-react";
+import { Download, RotateCcw, FileSpreadsheet, Upload } from "lucide-react";
 import { VEHICLES } from "@/data/vehicles";
 import { COLORS } from "@/data/defaults";
-import { parsePastedRows } from "@/utils/helpers";
+import { parsePastedRows, toNumber } from "@/utils/helpers";
+import { downloadTemplate, parseExcelFile } from "@/utils/excelTemplate";
 import { makeFloorLoadPlan } from "@/algorithm";
 import { exportPlanAsPdf } from "@/utils/exportPdf";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -44,6 +45,7 @@ export default function LaadplanApp() {
 
   const vehicle = VEHICLES[vehicleKey];
   const visualRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Plan state: algorithm-generated, manually adjustable
   const [plan, setPlan] = useState(() => makeFloorLoadPlan(lines, vehicle));
@@ -77,6 +79,32 @@ export default function LaadplanApp() {
       setLines(parsed);
       setPasteValue("");
     }
+  };
+
+  const handleExcelImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const rows = await parseExcelFile(file);
+      if (rows.length === 0) {
+        alert("Geen geldige rijen gevonden in het bestand.");
+        return;
+      }
+      setLines(
+        rows.map((row, index) => ({
+          id: crypto.randomUUID(),
+          description: String(row[0] || ""),
+          length: toNumber(row[1]),
+          width: toNumber(row[2]),
+          weight: toNumber(row[3]),
+          qty: toNumber(row[4]),
+          color: COLORS[index % COLORS.length],
+        })).filter((r) => r.description && r.length > 0 && r.width > 0 && r.qty > 0)
+      );
+    } catch (err) {
+      alert("Excel import mislukt: " + err.message);
+    }
+    e.target.value = "";
   };
 
   const handleExportPdf = async () => {
@@ -135,15 +163,29 @@ export default function LaadplanApp() {
                 onDelete={deletePlan}
               />
 
-              <div className="rounded border p-3">
-                <div className="mb-2 text-sm font-medium">Plakken vanuit Excel (omschrijving, lengte, breedte, kg, aantal)</div>
-                <textarea
-                  className="h-28 w-full rounded border p-2 text-sm"
-                  value={pasteValue}
-                  placeholder={"Euro pallet\t120\t80\t650\t10\nBlokpallet\t120\t100\t900\t2"}
-                  onChange={(e) => setPasteValue(e.target.value)}
-                  onBlur={handlePasteImport}
-                />
+              <div className="rounded border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Importeren</div>
+                  <div className="flex gap-1.5">
+                    <Button variant="outline" size="sm" className="gap-1" onClick={downloadTemplate}>
+                      <FileSpreadsheet className="h-3.5 w-3.5" /> Template
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="h-3.5 w-3.5" /> Upload Excel
+                    </Button>
+                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelImport} />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-slate-500">Of plak vanuit Excel (omschrijving, lengte, breedte, kg, aantal)</div>
+                  <textarea
+                    className="h-20 w-full rounded border p-2 text-sm"
+                    value={pasteValue}
+                    placeholder={"Euro pallet\t120\t80\t650\t10\nBlokpallet\t120\t100\t900\t2"}
+                    onChange={(e) => setPasteValue(e.target.value)}
+                    onBlur={handlePasteImport}
+                  />
+                </div>
               </div>
 
               <CargoInputTable lines={lines} setLines={setLines} hoveredLineIndex={hoveredLineIndex} />
